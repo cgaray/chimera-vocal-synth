@@ -71,9 +71,8 @@ unsafe fn apply(h: *mut Handle, o: &Value) {
             }
             "source" => {
                 vals.fill(f64::NAN);
-                let names = ["f0", "glide", "pressure", "breathiness", "tension", "fry", "roughness", "vibratoDepth", "vibratoRate", "drift", "voiced"];
                 for (k, v) in o["values"].as_object().unwrap() {
-                    let i = names.iter().position(|n| n == k).unwrap();
+                    let i = SOURCE_KEYS.iter().position(|n| n == k).unwrap_or_else(|| panic!("no source key {k}"));
                     vals[i] = v.as_f64().unwrap_or_else(|| if v.as_bool().unwrap() { 1.0 } else { 0.0 });
                 }
                 engine_set_source(h);

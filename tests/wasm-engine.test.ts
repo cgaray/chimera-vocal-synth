@@ -5,12 +5,11 @@
  */
 import { describe, expect, test } from "bun:test";
 import { readFileSync, existsSync } from "node:fs";
-import { writeGestures, CONTROL_KEYS, GESTURE_RECORD } from "../src/wasm/wire.ts";
+import { writeGestures, CONTROL_KEYS, GESTURE_RECORD, SOURCE_KEYS } from "../src/wasm/wire.ts";
 import type { Gesture } from "../src/wasm/types.ts";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const WASM = `${ROOT}target/wasm32-unknown-unknown/release/chimera_wasm.wasm`;
-const SOURCE_KEYS = ["f0", "glide", "pressure", "breathiness", "tension", "fry", "roughness", "vibratoDepth", "vibratoRate", "drift", "voiced", "brightness", "paralysisLeft", "paralysisRight", "foldPositionLeft", "foldPositionRight", "foldDetune"];
 
 interface Exports {
   memory: WebAssembly.Memory;
@@ -45,7 +44,7 @@ function render(x: Exports, s: { body: string; fsOut: number; samples: number; o
         fn("engine_set_artic")(h, o.tipFree === undefined ? 2 : o.tipFree ? 1 : 0);
       } else if (o.op === "source") {
         const v = vals();
-        for (const [k, val] of Object.entries(o.values as object)) v[SOURCE_KEYS.indexOf(k)] = typeof val === "boolean" ? (val ? 1 : 0) : val;
+        for (const [k, val] of Object.entries(o.values as object)) v[(SOURCE_KEYS as readonly string[]).indexOf(k)] = typeof val === "boolean" ? (val ? 1 : 0) : val;
         fn("engine_set_source")(h);
       } else if (o.op === "schedule") {
         const gs = o.gestures as Gesture[];
@@ -85,6 +84,12 @@ describe("wasm engine", () => {
       expect(`${s.name}: ${diff} samples differ`).toBe(`${s.name}: 0 samples differ`);
     }
   }, 120000);
+  test("the source keys are the engine's, in its order", () => {
+    // a key list copied by hand fell behind once: the paralysis keys never reached a renderer
+    const rs = readFileSync(`${ROOT}crates/chimera-wasm/src/lib.rs`, "utf8");
+    const list = rs.match(/pub const SOURCE_KEYS: \[&str; \d+\] = \[([^\]]*)\]/)![1];
+    expect<string[]>([...SOURCE_KEYS]).toEqual([...list.matchAll(/"(\w+)"/g)].map((m) => m[1]));
+  });
   test("gesture records are 272 bytes", () => {
     expect(GESTURE_RECORD).toBe(272);
     expect(CONTROL_KEYS.length).toBe(22);

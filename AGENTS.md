@@ -45,6 +45,10 @@ and the CLI) under a React UI. See the README.
   alone tests the old engine: use `bun run test`. Don't share a cargo `target/` between checkouts.
 - **Gesture records are defined twice**, in `crates/chimera-wasm/src/lib.rs` and
   `src/wasm/wire.ts`. Change both and bump `LAYOUT_VERSION`.
+- **Source values have one key list per language**: `SOURCE_KEYS` in
+  `crates/chimera-wasm/src/lib.rs` (Rust, the render_scenarios example included) and in
+  `src/wasm/wire.ts` (the worklet and the bun tests). Never copy it again. Check: `bun run test`
+  (the lists match, each slot sets its field, and wasm renders every golden scenario).
 - **The wasm loads before the UI.** A module that calls the engine at import must not be reachable
   from `src/main.tsx`'s static imports. Check: `bun tools/e2e.ts` against `bun run preview`.
 - **DOM content flows in `.screen-body`, never absolutely positioned.** Check: `bun run lint:layout`.

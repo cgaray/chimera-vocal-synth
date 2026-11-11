@@ -6,7 +6,7 @@
  * telemetry (~60 Hz). If the engine traps (a bug), the processor outputs silence from then on and
  * reports once; the main thread may build a new node, which restarts playback state.
  */
-import { writeGestures, writeSteps, fromUtf8, utf8, CONTROL_KEYS } from "../wasm/wire.ts";
+import { writeGestures, writeSteps, fromUtf8, utf8, CONTROL_KEYS, SOURCE_KEYS } from "../wasm/wire.ts";
 import type { ToWorklet, FromWorklet, TelemetryMessage } from "./protocol.ts";
 import type { BodyMix, CreatureTelemetry } from "../wasm/types.ts";
 
@@ -22,7 +22,6 @@ type Fn = (...a: number[]) => number;
 type Exports = { memory: WebAssembly.Memory } & Record<string, Fn>;
 
 const ARTIC_KEYS = CONTROL_KEYS.slice(0, 17);
-const SOURCE_KEYS = ["f0", "glide", "pressure", "breathiness", "tension", "fry", "roughness", "vibratoDepth", "vibratoRate", "drift", "voiced", "brightness", "paralysisLeft", "paralysisRight", "foldPositionLeft", "foldPositionRight", "foldDetune"];
 /** scalars at the head of the human telemetry block (crates/chimera-wasm/src/lib.rs) */
 const TELE_HEADER = 16;
 /** gestures taken from one schedule message */
@@ -121,7 +120,7 @@ class ChimeraProcessor extends AudioWorkletProcessor {
       case "source": {
         const v = this.values();
         for (const [k, val] of Object.entries(m.values)) {
-          const i = SOURCE_KEYS.indexOf(k);
+          const i = (SOURCE_KEYS as readonly string[]).indexOf(k);
           if (i >= 0) v[i] = typeof val === "boolean" ? (val ? 1 : 0) : (val as number);
         }
         x.engine_set_source(h);

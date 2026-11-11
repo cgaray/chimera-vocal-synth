@@ -234,17 +234,16 @@ pub unsafe extern "C" fn engine_set_artic(h: *mut Handle, tip_free: u32) {
     h.engine.set_artic(&p, tf);
 }
 
-/// Source values in the value area, in this order (NaN: unchanged): f0, glide, pressure,
-/// breathiness, tension, fry, roughness, vibratoDepth, vibratoRate, drift, voiced (0/1), brightness,
-/// paralysisLeft, paralysisRight, foldPositionLeft, foldPositionRight, foldDetune.
-///
-/// # Safety
-/// `h` must be a live handle.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn engine_set_source(h: *mut Handle) {
-    let h = handle!(h);
-    let v = &h.values;
-    let p = SourcePatch {
+/// The source values in the value area, in this order (NaN: unchanged; booleans 0/1). The one
+/// list: `src/wasm/wire.ts` mirrors it (a bun test reads it from here) and the render_scenarios
+/// example uses it.
+pub const SOURCE_KEYS: [&str; 17] = [
+    "f0", "glide", "pressure", "breathiness", "tension", "fry", "roughness", "vibratoDepth", "vibratoRate", "drift", "voiced", "brightness",
+    "paralysisLeft", "paralysisRight", "foldPositionLeft", "foldPositionRight", "foldDetune",
+];
+
+fn source_patch(v: &[f64]) -> SourcePatch {
+    SourcePatch {
         f0: opt(v[0]),
         glide: opt(v[1]),
         pressure: opt(v[2]),
@@ -262,7 +261,17 @@ pub unsafe extern "C" fn engine_set_source(h: *mut Handle) {
         fold_position_left: opt(v[14]),
         fold_position_right: opt(v[15]),
         fold_detune: opt(v[16]),
-    };
+    }
+}
+
+/// Apply the source values in the value area ([`SOURCE_KEYS`] order).
+///
+/// # Safety
+/// `h` must be a live handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn engine_set_source(h: *mut Handle) {
+    let h = handle!(h);
+    let p = source_patch(&h.values);
     h.engine.set_source(&p);
 }
 
@@ -579,4 +588,21 @@ pub unsafe extern "C" fn engine_creature_telemetry(h: *mut Handle) -> *const f64
 pub unsafe extern "C" fn engine_score_json(h: *mut Handle) -> u32 {
     let h = handle!(h);
     api::set_result(serde_json::to_value(h.engine.score().gestures()).map_err(|e| e.to_string()))
+}
+
+#[cfg(test)]
+mod source_keys {
+    use super::*;
+
+    #[test]
+    fn each_source_slot_sets_the_field_its_key_names() {
+        // the slot order is written out twice (SOURCE_KEYS and source_patch): they must agree
+        for (i, key) in SOURCE_KEYS.iter().enumerate() {
+            let mut v = [f64::NAN; 32];
+            v[i] = 1.0;
+            let json = serde_json::to_value(source_patch(&v)).unwrap();
+            let set: Vec<&String> = json.as_object().unwrap().keys().collect();
+            assert_eq!(set, vec![*key], "slot {i}");
+        }
+    }
 }
