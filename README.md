@@ -31,9 +31,9 @@ for tests and the `chimera` CLI.
 - **Bestiary**: songbird (two-voice syrinx), seal, alligator and elephant.
 - **Duet** (`?show=<id>`): two 3D heads replay a pre-rendered song.
 
-Either vocal fold, or both, can be paralyzed (the Vocal folds screen's preset chip, or Play → Voice
-→ Folds): the voice turns breathy
-and weak, beats against a fold that can't hold its pitch, or loses its pitch range or its voice.
+Either vocal fold, or both, can be paralyzed (the Vocal folds screen's preset chip, or Play →
+Voice → Folds): the voice turns breathy and weak, beats against a fold that can't hold its pitch,
+or loses its pitch range or its voice.
 
 Male, female and child bodies blend continuously. Everything on screen animates from live
 engine state: pressure in the airway, airflow, the vocal folds, spectra and formants.
