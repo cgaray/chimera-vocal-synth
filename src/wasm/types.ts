@@ -131,6 +131,8 @@ export interface VoiceSource {
   foldPositionRight: number;
   /** a paralyzed fold's slack pitch, semitones from the body's speaking pitch */
   foldDetune: number;
+  /** self-oscillating two-mass folds instead of the parametric pulse */
+  physicalFolds: boolean;
 }
 
 export interface VoiceTelemetry {

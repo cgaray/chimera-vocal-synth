@@ -9,6 +9,7 @@
 
 use crate::math::{Drift, PI, Rng, TAU, clamp, cos, exp, js_max, js_min, js_round, pow, sin, smoothstep};
 use crate::physics::CM_H2O;
+use crate::sources::two_mass::{FoldDrive, TwoMassFolds};
 
 #[derive(Clone, Copy, Debug)]
 pub struct GlottisParams {
@@ -54,6 +55,10 @@ pub struct GlottisParams {
     pub fold_gap: [f64; 2],
     /// natural pitch (Hz) of a fully paralyzed fold, which can't be tensed
     pub fold_rest_f0: f64,
+    /// the area comes from self-oscillating two-mass folds (`two_mass.rs`) instead of the pulse
+    pub two_mass: bool,
+    /// body size (1 adult male), for the two-mass folds' length
+    pub body_scale: f64,
 }
 
 pub const DEFAULT_GLOTTIS: GlottisParams = GlottisParams {
@@ -77,6 +82,8 @@ pub const DEFAULT_GLOTTIS: GlottisParams = GlottisParams {
     paralysis: [0.0; 2],
     fold_gap: [0.0; 2],
     fold_rest_f0: 110.0,
+    two_mass: false,
+    body_scale: 1.0,
 };
 
 #[derive(Clone, Debug)]
@@ -119,6 +126,7 @@ pub struct ParametricGlottis {
     fold_ratio: [f64; 2],
     par_sm: [f64; 2],
     gap_sm: [f64; 2],
+    pub folds: TwoMassFolds,
 }
 
 impl ParametricGlottis {
@@ -153,6 +161,7 @@ impl ParametricGlottis {
             fold_ratio: [1.0; 2],
             par_sm: [0.0; 2],
             gap_sm: [0.0; 2],
+            folds: TwoMassFolds::new(fs),
         }
     }
 
@@ -249,6 +258,9 @@ impl ParametricGlottis {
         self.amp_sm += sc * (p.amplitude * effort_scale - self.amp_sm);
         self.closure_sm += sc * (p.closure - self.closure_sm);
         self.static_sm += sc * (p.abduction + p.chink - self.static_sm);
+        if p.two_mass {
+            return self.two_mass_area(f0, dp);
+        }
         let vib = self.amp_sm * self.cycle_amp * self.voicing_sm * pulse;
         // a paralyzed fold can't be pressed shut: its rest gap stays open through a glottal stop
         let statics = self.static_sm * (1.0 - 0.92 * self.closure_sm) + fold_gap;
@@ -259,6 +271,32 @@ impl ParametricGlottis {
 
     pub fn cycle_phase(&self) -> f64 {
         self.phase
+    }
+
+    /// The glottal area from the two-mass folds: the folds' own opening (abduction shared between
+    /// them, a paralyzed fold's rest gap its own) plus the posterior chink, which only pressing closes.
+    fn two_mass_area(&mut self, f0: f64, dp: f64) -> f64 {
+        let p = self.params;
+        let abd = js_max(0.0, self.static_sm - p.chink);
+        let d = FoldDrive {
+            f0,
+            dp,
+            open: [0.5 * abd + self.gap_sm[0], 0.5 * abd + self.gap_sm[1]],
+            closure: self.closure_sm,
+            paralysis: self.par_sm,
+            rest_f0: p.fold_rest_f0,
+            scale: p.body_scale,
+        };
+        let folds = self.folds.step(&d);
+        // telemetry: the cycle phase since the last opening, and voicing while the folds keep time
+        let period = self.folds.period;
+        let vibrating = period > 0.0 && self.folds.since_open() < 1.5 * period;
+        self.phase = if period > 0.0 { js_min(0.999, self.folds.since_open() / period) } else { 0.0 };
+        self.voicing_sm += self.voice_coef * ((if vibrating { 1.0 } else { 0.0 }) - self.voicing_sm);
+        self.voicing = self.voicing_sm;
+        let a = folds + p.chink * (1.0 - 0.92 * self.closure_sm);
+        self.area = a;
+        a
     }
 
     /// The glottis as two folds that no longer mirror each other (one or both paralyzed).

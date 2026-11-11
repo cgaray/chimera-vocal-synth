@@ -10,7 +10,7 @@ etc. Tonal and percussive (beatboxing). Beautiful visuals/diagrams, dynamic anim
 params."
 
 **Not built (yet):** the design's wider bestiary (only songbird, seal, alligator and elephant
-exist), the two-mass vocal folds, an IPA chart mode, the app-side EQ/reverb/limiter chain and
+exist), an IPA chart mode, the app-side EQ/reverb/limiter chain and
 in-app WAV export (the CLI renders WAVs; the app has a close-mic chain in WebAudio). Treat the
 code as the truth where this file disagrees.
 
@@ -89,8 +89,17 @@ branching (nasal tract, sinuses, piriform fossae, two bronchi, vocal sacs, OEC).
   phonation threshold, so a lateral fold leaves a near-aphonic, breathy voice and two leave
   only breath. The constants are judgement, not fitted to patient data; inspiratory stridor
   (bilateral paralysis's airway sign) isn't modelled, since the voice doesn't breathe in.
-* **Two-mass vocal folds (advanced)**: Ishizaka–Flanagan with collision; self-oscillating;
-  pitch tracked by a feedback controller on the tension factor Q.
+* **Two-mass vocal folds** (`physicalFolds`, `sources/two_mass.rs`, off by default):
+  Ishizaka–Flanagan masses, a left and a right fold of their own (Ishizaka & Isshiki 1976;
+  Steinecke & Herzel 1995), driven by the airway's transglottal pressure with the Bernoulli
+  drop, colliding at the midline. They self-oscillate from a slightly convergent rest shape (with
+  equal sections the force at rest is exactly zero and the deterministic folds never start).
+  Pitch: a fold's tension Q scales stiffness up and mass down; the commanded Q is f0 / 136 Hz,
+  and a slow loop corrects it from the measured period (within 0.3 % from 90 to 220 Hz; above
+  ~300 Hz it falls short and turns irregular). Abduction, the pressing of a glottal stop and the
+  posterior chink come from the same controls as the parametric pulse, so speech voices and
+  devoices alike. With paralysis, a fold keeps its slack Q and rest gap, and locking, a
+  compromise pitch, period doubling and irregular vibration come out of the mechanics.
 * **Ventricular folds**: second valve above the glottis, entrains at f0/2 for growl /
   kargyraa; static narrowing for harshness. **Epilarynx** narrowing for twang/ring.
 * **Syrinx (birds)**: two independent labial oscillators (Gardner–Mindlin normal form
@@ -221,8 +230,9 @@ Rayleigh–Plesset oscillators behind some creature sounds.
   the group or its work, so we can't say CHIMERA builds on it. Physical vocal-tract models share
   a lot of ground, so the resemblance may not point to a borrowing.
 
-The two-mass (Ishizaka–Flanagan) folds named in section 2 were designed but never built, so they
-aren't a source of the current sound.
+The two-mass folds (section 2) use Ishizaka & Flanagan's (1972) masses, stiffnesses, damping and
+collision, and the left/right split of Ishizaka & Isshiki (1976) and Steinecke & Herzel (1995).
+They are opt-in (`physicalFolds`); the default voice is still the parametric pulse.
 
 ### Data and tools that measure the voice
 

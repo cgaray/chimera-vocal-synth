@@ -237,9 +237,9 @@ pub unsafe extern "C" fn engine_set_artic(h: *mut Handle, tip_free: u32) {
 /// The source values in the value area, in this order (NaN: unchanged; booleans 0/1). The one
 /// list: `src/wasm/wire.ts` mirrors it (a bun test reads it from here) and the render_scenarios
 /// example uses it.
-pub const SOURCE_KEYS: [&str; 17] = [
+pub const SOURCE_KEYS: [&str; 18] = [
     "f0", "glide", "pressure", "breathiness", "tension", "fry", "roughness", "vibratoDepth", "vibratoRate", "drift", "voiced", "brightness",
-    "paralysisLeft", "paralysisRight", "foldPositionLeft", "foldPositionRight", "foldDetune",
+    "paralysisLeft", "paralysisRight", "foldPositionLeft", "foldPositionRight", "foldDetune", "physicalFolds",
 ];
 
 fn source_patch(v: &[f64]) -> SourcePatch {
@@ -261,6 +261,7 @@ fn source_patch(v: &[f64]) -> SourcePatch {
         fold_position_left: opt(v[14]),
         fold_position_right: opt(v[15]),
         fold_detune: opt(v[16]),
+        physical_folds: opt(v[17]).map(|x| x != 0.0),
     }
 }
 

@@ -55,6 +55,10 @@ pub struct VoiceSource {
     /// a paralyzed fold's slack pitch, in semitones from the body's speaking pitch
     #[serde(default)]
     pub fold_detune: f64,
+    /// the folds as self-oscillating two-mass folds instead of the parametric pulse (off: the
+    /// voice as it always sounded)
+    #[serde(default)]
+    pub physical_folds: bool,
 }
 
 fn default_fold_position() -> f64 {
@@ -65,7 +69,7 @@ fn default_brightness() -> f64 {
     DEFAULT_SOURCE.brightness
 }
 
-pub const DEFAULT_SOURCE: VoiceSource = VoiceSource { f0: 110.0, glide: 0.06, pressure: 8.0, breathiness: 0.15, tension: 0.5, fry: 0.0, roughness: 0.1, vibrato_depth: 0.0, vibrato_rate: 6.0, drift: 5.0, voiced: true, brightness: 0.25, paralysis_left: 0.0, paralysis_right: 0.0, fold_position_left: 0.2, fold_position_right: 0.2, fold_detune: 0.0 };
+pub const DEFAULT_SOURCE: VoiceSource = VoiceSource { f0: 110.0, glide: 0.06, pressure: 8.0, breathiness: 0.15, tension: 0.5, fry: 0.0, roughness: 0.1, vibrato_depth: 0.0, vibrato_rate: 6.0, drift: 5.0, voiced: true, brightness: 0.25, paralysis_left: 0.0, paralysis_right: 0.0, fold_position_left: 0.2, fold_position_right: 0.2, fold_detune: 0.0, physical_folds: false };
 
 /// `Partial<VoiceSource>`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -105,6 +109,8 @@ pub struct SourcePatch {
     pub fold_position_right: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fold_detune: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub physical_folds: Option<bool>,
 }
 
 impl SourcePatch {
@@ -116,13 +122,13 @@ impl SourcePatch {
         macro_rules! set {
             ($($f:ident),*) => { $( if let Some(x) = self.$f { s.$f = x; } )* };
         }
-        set!(f0, glide, pressure, breathiness, tension, fry, roughness, vibrato_depth, vibrato_rate, drift, voiced, brightness, paralysis_left, paralysis_right, fold_position_left, fold_position_right, fold_detune);
+        set!(f0, glide, pressure, breathiness, tension, fry, roughness, vibrato_depth, vibrato_rate, drift, voiced, brightness, paralysis_left, paralysis_right, fold_position_left, fold_position_right, fold_detune, physical_folds);
     }
     pub fn merge(&mut self, o: &SourcePatch) {
         macro_rules! set {
             ($($f:ident),*) => { $( if o.$f.is_some() { self.$f = o.$f; } )* };
         }
-        set!(f0, glide, pressure, breathiness, tension, fry, roughness, vibrato_depth, vibrato_rate, drift, voiced, brightness, paralysis_left, paralysis_right, fold_position_left, fold_position_right, fold_detune);
+        set!(f0, glide, pressure, breathiness, tension, fry, roughness, vibrato_depth, vibrato_rate, drift, voiced, brightness, paralysis_left, paralysis_right, fold_position_left, fold_position_right, fold_detune, physical_folds);
     }
     pub fn from_source(s: &VoiceSource) -> Self {
         SourcePatch {
@@ -143,6 +149,7 @@ impl SourcePatch {
             fold_position_left: Some(s.fold_position_left),
             fold_position_right: Some(s.fold_position_right),
             fold_detune: Some(s.fold_detune),
+            physical_folds: Some(s.physical_folds),
         }
     }
 }
@@ -392,6 +399,8 @@ impl HumanVoice {
         g.paralysis = [clamp(s.paralysis_left, 0.0, 1.0), clamp(s.paralysis_right, 0.0, 1.0)];
         g.fold_gap = [gap(s.fold_position_left), gap(s.fold_position_right)];
         g.fold_rest_f0 = self.rest_f0 * pow(2.0, s.fold_detune / 12.0);
+        g.two_mass = s.physical_folds;
+        g.body_scale = self.airway.body.scale;
     }
 
     /// Render `out.len()` output samples.

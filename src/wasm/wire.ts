@@ -16,7 +16,7 @@ export const CONTROL_KEYS = [
 /** The source values in the engine's value area, in order (SOURCE_KEYS in crates/chimera-wasm/src/lib.rs; a test compares them). */
 export const SOURCE_KEYS = [
   "f0", "glide", "pressure", "breathiness", "tension", "fry", "roughness", "vibratoDepth", "vibratoRate", "drift", "voiced", "brightness",
-  "paralysisLeft", "paralysisRight", "foldPositionLeft", "foldPositionRight", "foldDetune",
+  "paralysisLeft", "paralysisRight", "foldPositionLeft", "foldPositionRight", "foldDetune", "physicalFolds",
 ] as const;
 const KEY_INDEX: Record<string, number> = Object.fromEntries(CONTROL_KEYS.map((k, i) => [k, i]));
 const LABEL_CAP = 24;
