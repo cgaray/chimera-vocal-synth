@@ -67,6 +67,7 @@ impl Engine {
 
     fn make_voice(fs: f64, body: BodyMix) -> HumanVoice {
         let mut v = HumanVoice::new(fs, body.body(), oversample_for(fs));
+        v.rest_f0 = default_f0(body);
         v.set_source(&SourcePatch::f0(default_f0(body)));
         v
     }

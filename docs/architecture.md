@@ -75,6 +75,20 @@ branching (nasal tract, sinuses, piriform fossae, two bronchi, vocal sacs, OEC).
   oral closure all emerge from the tract. Perturbations: jitter, shimmer, vibrato with
   drift, 1/f flutter, diplophonia/period doubling, vocal fry (low f0, short OQ, double
   pulses), falsetto (sinusoidal, incomplete closure).
+* **Vocal-fold paralysis** (`paralysisLeft/Right`, `foldPositionLeft/Right`, `foldDetune`): the
+  parametric pulse splits into a left and a right fold, each opening half the glottis, only
+  while one is paralyzed (healthy folds stay one mirrored pulse, sample for sample). A
+  paralyzed fold rests off the midline (median → paramedian → intermediate → lateral; the gap
+  grows as position^1.5, 0.24 cm² per lateral fold, adult male), can't be pressed shut (glottal
+  stops leak), swings half as far, and has its own slack natural pitch (the body's speaking
+  pitch + `foldDetune`) instead of following f0. Each fold is a phase oscillator: a healthy
+  fold is locked to the commanded cycle, a paralyzed one only to the other fold (Adler
+  locking). Near the healthy fold's pitch it locks with a lag; farther off it slips and the
+  pulse trains beat (diplophonia); with both paralyzed the pitch stays at the slack pitch
+  whatever note is asked for. A wide rest gap weakens the vibration and raises the
+  phonation threshold, so a lateral fold leaves a near-aphonic, breathy voice and two leave
+  only breath. The constants are judgement, not fitted to patient data; inspiratory stridor
+  (bilateral paralysis's airway sign) isn't modelled, since the voice doesn't breathe in.
 * **Two-mass vocal folds (advanced)**: Ishizaka–Flanagan with collision; self-oscillating;
   pitch tracked by a feedback controller on the tension factor Q.
 * **Ventricular folds**: second valve above the glottis, entrains at f0/2 for growl /
@@ -200,7 +214,8 @@ Rayleigh–Plesset oscillators behind some creature sounds.
   is cited. Where the coefficients (`AreaLaw`) came from isn't recorded, except the 1.6 for the
   space ahead of the tongue tip, which came from hill-climb experiment 12.
 - **The glottal area pulse** (`sources/glottis.rs`): parametric, with no published pulse model
-  cited.
+  cited. Its two-fold split for paralysis is phase oscillators with Adler (1946) locking, a
+  standard method; its constants aren't taken from a paper.
 - **The creatures' anatomy** (seal, alligator, elephant, songbird tract): no source recorded.
 - **Aalto University's speech modelling group.** Nothing in the code, docs or history mentions
   the group or its work, so we can't say CHIMERA builds on it. Physical vocal-tract models share

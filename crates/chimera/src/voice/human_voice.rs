@@ -40,13 +40,32 @@ pub struct VoiceSource {
     /// the model can, so there is little room to darken and a lot to brighten.
     #[serde(default = "default_brightness")]
     pub brightness: f64,
+    /// Vocal-fold paralysis 0 (healthy) … 1 (no motor drive), left and right fold. A paralyzed
+    /// fold can't close the glottis or be tensed: it rests apart from the midline, vibrates weakly
+    /// and at its own slack pitch, and the voice turns breathy, weak and, off its pitch, diplophonic.
+    #[serde(default)]
+    pub paralysis_left: f64,
+    #[serde(default)]
+    pub paralysis_right: f64,
+    /// where a paralyzed fold rests: 0 median, ~0.2 paramedian, ~0.5 intermediate, 1 lateral
+    #[serde(default = "default_fold_position")]
+    pub fold_position_left: f64,
+    #[serde(default = "default_fold_position")]
+    pub fold_position_right: f64,
+    /// a paralyzed fold's slack pitch, in semitones from the body's speaking pitch
+    #[serde(default)]
+    pub fold_detune: f64,
+}
+
+fn default_fold_position() -> f64 {
+    DEFAULT_SOURCE.fold_position_left
 }
 
 fn default_brightness() -> f64 {
     DEFAULT_SOURCE.brightness
 }
 
-pub const DEFAULT_SOURCE: VoiceSource = VoiceSource { f0: 110.0, glide: 0.06, pressure: 8.0, breathiness: 0.15, tension: 0.5, fry: 0.0, roughness: 0.1, vibrato_depth: 0.0, vibrato_rate: 6.0, drift: 5.0, voiced: true, brightness: 0.25 };
+pub const DEFAULT_SOURCE: VoiceSource = VoiceSource { f0: 110.0, glide: 0.06, pressure: 8.0, breathiness: 0.15, tension: 0.5, fry: 0.0, roughness: 0.1, vibrato_depth: 0.0, vibrato_rate: 6.0, drift: 5.0, voiced: true, brightness: 0.25, paralysis_left: 0.0, paralysis_right: 0.0, fold_position_left: 0.2, fold_position_right: 0.2, fold_detune: 0.0 };
 
 /// `Partial<VoiceSource>`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -76,6 +95,16 @@ pub struct SourcePatch {
     pub voiced: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub brightness: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub paralysis_left: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub paralysis_right: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fold_position_left: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fold_position_right: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fold_detune: Option<f64>,
 }
 
 impl SourcePatch {
@@ -87,13 +116,13 @@ impl SourcePatch {
         macro_rules! set {
             ($($f:ident),*) => { $( if let Some(x) = self.$f { s.$f = x; } )* };
         }
-        set!(f0, glide, pressure, breathiness, tension, fry, roughness, vibrato_depth, vibrato_rate, drift, voiced, brightness);
+        set!(f0, glide, pressure, breathiness, tension, fry, roughness, vibrato_depth, vibrato_rate, drift, voiced, brightness, paralysis_left, paralysis_right, fold_position_left, fold_position_right, fold_detune);
     }
     pub fn merge(&mut self, o: &SourcePatch) {
         macro_rules! set {
             ($($f:ident),*) => { $( if o.$f.is_some() { self.$f = o.$f; } )* };
         }
-        set!(f0, glide, pressure, breathiness, tension, fry, roughness, vibrato_depth, vibrato_rate, drift, voiced, brightness);
+        set!(f0, glide, pressure, breathiness, tension, fry, roughness, vibrato_depth, vibrato_rate, drift, voiced, brightness, paralysis_left, paralysis_right, fold_position_left, fold_position_right, fold_detune);
     }
     pub fn from_source(s: &VoiceSource) -> Self {
         SourcePatch {
@@ -109,6 +138,11 @@ impl SourcePatch {
             drift: Some(s.drift),
             voiced: Some(s.voiced),
             brightness: Some(s.brightness),
+            paralysis_left: Some(s.paralysis_left),
+            paralysis_right: Some(s.paralysis_right),
+            fold_position_left: Some(s.fold_position_left),
+            fold_position_right: Some(s.fold_position_right),
+            fold_detune: Some(s.fold_detune),
         }
     }
 }
@@ -187,6 +221,9 @@ pub struct HumanVoice {
     pub score: GestureScore,
     pub clock: f64,
     blend: [Blended; N_CONTROL],
+    /// The body's speaking pitch (Hz): a paralyzed fold's slack pitch, before `fold_detune`.
+    /// `Engine` sets it per body; set it before the source when building a voice by hand.
+    pub rest_f0: f64,
     base_abduction: f64,
     base_closure: f64,
     score_f0: Option<f64>,
@@ -251,6 +288,7 @@ impl HumanVoice {
             score: GestureScore::new(),
             clock: 0.0,
             blend: [Blended::default(); N_CONTROL],
+            rest_f0: 110.0,
             base_abduction: 0.0,
             base_closure: 0.0,
             score_f0: None,
@@ -347,6 +385,13 @@ impl HumanVoice {
         g.vibrato_rate = s.vibrato_rate;
         g.drift = s.drift;
         g.effort = clamp((s.pressure.abs() - 3.0) / 10.0, 0.0, 1.0);
+        // Paralysis: a fold at the lateral position leaves about 0.24 cm² (adult male) of the
+        // glottis open by itself, both together about the opening of a voiceless consonant. The gap
+        // grows faster than the position, so folds near the midline (paramedian) leave only a slit.
+        let gap = |pos: f64| 0.24 * pow(clamp(pos, 0.0, 1.0), 1.5) * k2;
+        g.paralysis = [clamp(s.paralysis_left, 0.0, 1.0), clamp(s.paralysis_right, 0.0, 1.0)];
+        g.fold_gap = [gap(s.fold_position_left), gap(s.fold_position_right)];
+        g.fold_rest_f0 = self.rest_f0 * pow(2.0, s.fold_detune / 12.0);
     }
 
     /// Render `out.len()` output samples.

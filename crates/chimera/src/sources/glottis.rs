@@ -7,7 +7,7 @@
 //!  - transglottal pressure must exceed the phonation threshold (≈2–3 cmH₂O),
 //!  - wide abduction (voiceless consonants, /h/) stops vibration.
 
-use crate::math::{Drift, PI, Rng, TAU, clamp, cos, exp, js_max, js_min, pow, sin, smoothstep};
+use crate::math::{Drift, PI, Rng, TAU, clamp, cos, exp, js_max, js_min, js_round, pow, sin, smoothstep};
 use crate::physics::CM_H2O;
 
 #[derive(Clone, Copy, Debug)]
@@ -46,6 +46,14 @@ pub struct GlottisParams {
     /// bifurcation 0..1: a logistic map drives per-cycle period and amplitude. Rising values walk
     /// through period doubling (subharmonics, ~0.3), period four (~0.55) into deterministic chaos (>0.62).
     pub chaos: f64,
+    /// Paralysis of each fold, [left, right], 0 (healthy) … 1 (no motor drive). A paralyzed fold
+    /// can't adduct (it rests at `fold_gap` from the midline), vibrates more weakly, and keeps its
+    /// own slack natural pitch (`fold_rest_f0`) instead of following f0. See `fold_pulses`.
+    pub paralysis: [f64; 2],
+    /// the half-gap (cm²) each fold leaves at the midline when fully paralyzed (its rest position)
+    pub fold_gap: [f64; 2],
+    /// natural pitch (Hz) of a fully paralyzed fold, which can't be tensed
+    pub fold_rest_f0: f64,
 }
 
 pub const DEFAULT_GLOTTIS: GlottisParams = GlottisParams {
@@ -66,6 +74,9 @@ pub const DEFAULT_GLOTTIS: GlottisParams = GlottisParams {
     diplophonia: 0.0,
     closure: 0.0,
     chaos: 0.0,
+    paralysis: [0.0; 2],
+    fold_gap: [0.0; 2],
+    fold_rest_f0: 110.0,
 };
 
 #[derive(Clone, Debug)]
@@ -102,6 +113,12 @@ pub struct ParametricGlottis {
     closure_sm: f64,
     amp_sm: f64,
     sm_coef: f64,
+    // the two folds, when they move apart (paralysis): each fold's cycle phase, natural-pitch
+    // ratio to f0 (updated at the drift rate), smoothed paralysis and smoothed rest gap (cm²)
+    fold_phase: [f64; 2],
+    fold_ratio: [f64; 2],
+    par_sm: [f64; 2],
+    gap_sm: [f64; 2],
 }
 
 impl ParametricGlottis {
@@ -132,12 +149,17 @@ impl ParametricGlottis {
             closure_sm: 0.0,
             amp_sm: 0.0,
             sm_coef: 1.0 - exp(-1.0 / (0.004 * fs)),
+            fold_phase: [0.0; 2],
+            fold_ratio: [1.0; 2],
+            par_sm: [0.0; 2],
+            gap_sm: [0.0; 2],
         }
     }
 
     /// Reset phase etc.
     pub fn reset(&mut self) {
         self.phase = 0.0;
+        self.fold_phase = [0.0; 2];
         self.voicing_sm = 0.0;
         self.dp_sm = 0.0;
     }
@@ -160,6 +182,12 @@ impl ParametricGlottis {
             }
             let cents = p.vibrato_depth * sin(TAU * self.vib_phase) + p.drift * self.drift_value;
             self.pitch_factor = pow(2.0, cents / 1200.0);
+            for i in 0..2 {
+                // a paralyzed fold can't be tensed, so its natural pitch slides from the commanded f0
+                // toward its slack rest pitch (geometrically)
+                let pr = self.par_sm[i];
+                self.fold_ratio[i] = if pr > 0.0 { pow(p.fold_rest_f0 / js_max(1.0, p.f0 * self.pitch_factor), pr) } else { 1.0 };
+            }
         }
         let mut f0 = p.f0 * self.pitch_factor;
         // fry pulls the rate down toward ~45 Hz
@@ -176,7 +204,8 @@ impl ParametricGlottis {
         self.voicing = self.voicing_sm;
 
         // phase advance with per-cycle perturbations
-        self.phase += (f0 / self.fs) / self.cycle_period_scale;
+        let inc = (f0 / self.fs) / self.cycle_period_scale;
+        self.phase += inc;
         if self.phase >= 1.0 {
             self.phase -= 1.0;
             self.cycle_index += 1;
@@ -203,21 +232,26 @@ impl ParametricGlottis {
         if p.fry > 0.0 {
             oq = oq * (1.0 - p.fry) + 0.28 * p.fry;
         }
-        let mut pulse = shape(self.phase, oq, p.skew, p.closure_sharpness);
-        if p.fry > 0.3 {
-            // second, weaker pulse shortly after the first (double pulsing typical of fry)
-            let ph2 = self.phase - 0.38;
-            if ph2 > 0.0 {
-                pulse += 0.55 * smoothstep(0.3, 0.8, p.fry) * shape(ph2, oq * 0.8, p.skew, p.closure_sharpness);
-            }
-        }
-        let effort_scale = 0.45 + 0.75 * p.effort;
         let sc = self.sm_coef;
+        for i in 0..2 {
+            self.par_sm[i] += sc * (p.paralysis[i] - self.par_sm[i]);
+            self.gap_sm[i] += sc * (p.paralysis[i] * p.fold_gap[i] - self.gap_sm[i]);
+        }
+        let asymmetric = self.par_sm[0] > 0.0 || self.par_sm[1] > 0.0;
+        let (pulse, fold_gap) = if asymmetric {
+            self.fold_pulses(f0, inc, oq)
+        } else {
+            // healthy folds move as mirror images: one pulse for the whole glottis
+            self.fold_phase = [self.phase; 2];
+            (pulse_at(self.phase, oq, &p), 0.0)
+        };
+        let effort_scale = 0.45 + 0.75 * p.effort;
         self.amp_sm += sc * (p.amplitude * effort_scale - self.amp_sm);
         self.closure_sm += sc * (p.closure - self.closure_sm);
         self.static_sm += sc * (p.abduction + p.chink - self.static_sm);
         let vib = self.amp_sm * self.cycle_amp * self.voicing_sm * pulse;
-        let statics = self.static_sm * (1.0 - 0.92 * self.closure_sm);
+        // a paralyzed fold can't be pressed shut: its rest gap stays open through a glottal stop
+        let statics = self.static_sm * (1.0 - 0.92 * self.closure_sm) + fold_gap;
         let a = js_max(0.0, vib + statics);
         self.area = a;
         a
@@ -226,6 +260,55 @@ impl ParametricGlottis {
     pub fn cycle_phase(&self) -> f64 {
         self.phase
     }
+
+    /// The glottis as two folds that no longer mirror each other (one or both paralyzed).
+    /// Returns the normalised vibratory pulse (each fold opens half the glottis) and the static
+    /// rest gap the paralyzed folds leave (cm²).
+    ///
+    /// Each fold is a phase oscillator. A healthy fold is held to the commanded cycle; a paralyzed
+    /// one runs at its own natural pitch and is pulled only by the other fold through the shared
+    /// airstream. Near the healthy fold's pitch it locks, lagging it (the phase asymmetry seen in
+    /// stroboscopy); farther away it slips, and the two pulse trains beat (diplophonia). A rest gap
+    /// weakens the Bernoulli drive, so wide-open folds barely vibrate, and both paralyzed in a
+    /// lateral position leave only breath. The constants are judgement, not fitted to data.
+    fn fold_pulses(&mut self, f0: f64, inc: f64, oq: f64) -> (f64, f64) {
+        let p = self.params;
+        let master = self.phase;
+        let prev = self.fold_phase;
+        let mut pulse = 0.0;
+        for i in 0..2 {
+            let pr = self.par_sm[i];
+            let wrap = |d: f64| d - js_round(d);
+            let to_cycle = wrap(master - prev[i]);
+            let to_other = wrap(prev[1 - i] - prev[i]);
+            // locking ranges (Hz): the motor drive to the commanded cycle fades with paralysis; the
+            // aerodynamic pull between the folds stays
+            let k_drive = 0.15 * f0 * (1.0 - pr);
+            let k_folds = 0.06 * f0;
+            let mut ph = prev[i] + inc * self.fold_ratio[i] + (k_drive * sin(TAU * to_cycle) + k_folds * sin(TAU * to_other)) / self.fs;
+            ph -= js_round(ph - 0.5);
+            self.fold_phase[i] = ph;
+            // a flaccid fold swings less far
+            pulse += 0.5 * (1.0 - 0.5 * pr) * pulse_at(ph, oq, &p);
+        }
+        let gap = self.gap_sm[0] + self.gap_sm[1];
+        let drive = 1.0 - smoothstep(0.1, 0.5, gap);
+        (pulse * drive, gap)
+    }
+}
+
+/// The normalised area pulse (0..1+) at cycle phase `ph`, with fry's double pulse.
+#[inline]
+fn pulse_at(ph: f64, oq: f64, p: &GlottisParams) -> f64 {
+    let mut pulse = shape(ph, oq, p.skew, p.closure_sharpness);
+    if p.fry > 0.3 {
+        // second, weaker pulse shortly after the first (double pulsing typical of fry)
+        let ph2 = ph - 0.38;
+        if ph2 > 0.0 {
+            pulse += 0.55 * smoothstep(0.3, 0.8, p.fry) * shape(ph2, oq * 0.8, p.skew, p.closure_sharpness);
+        }
+    }
+    pulse
 }
 
 /// Normalised area pulse (0..1) at cycle phase ph.

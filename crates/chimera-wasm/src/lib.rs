@@ -235,7 +235,8 @@ pub unsafe extern "C" fn engine_set_artic(h: *mut Handle, tip_free: u32) {
 }
 
 /// Source values in the value area, in this order (NaN: unchanged): f0, glide, pressure,
-/// breathiness, tension, fry, roughness, vibratoDepth, vibratoRate, drift, voiced (0/1), brightness.
+/// breathiness, tension, fry, roughness, vibratoDepth, vibratoRate, drift, voiced (0/1), brightness,
+/// paralysisLeft, paralysisRight, foldPositionLeft, foldPositionRight, foldDetune.
 ///
 /// # Safety
 /// `h` must be a live handle.
@@ -256,6 +257,11 @@ pub unsafe extern "C" fn engine_set_source(h: *mut Handle) {
         drift: opt(v[9]),
         voiced: opt(v[10]).map(|x| x != 0.0),
         brightness: opt(v[11]),
+        paralysis_left: opt(v[12]),
+        paralysis_right: opt(v[13]),
+        fold_position_left: opt(v[14]),
+        fold_position_right: opt(v[15]),
+        fold_detune: opt(v[16]),
     };
     h.engine.set_source(&p);
 }
