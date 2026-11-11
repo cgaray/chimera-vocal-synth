@@ -24,6 +24,17 @@ const FOLD_PRESETS: { name: string; title: string; folds: FoldSettings }[] = [
 ];
 const FOLD_KEYS = ["paralysisLeft", "paralysisRight", "foldPositionLeft", "foldPositionRight"] as const;
 
+/** The folds as self-oscillating two-mass folds (paralysis then comes out of the mechanics) or the drawn pulse. */
+export function PhysicalFoldsChip() {
+  const on = useStore((st) => st.source.physicalFolds);
+  const setSource = useStore((st) => st.setSource);
+  return (
+    <Chip on={on} onClick={() => setSource({ physicalFolds: !on })} title={on ? "Two-mass folds: they vibrate by themselves, and a paralyzed fold's mechanics shape the voice" : "Parametric folds (the usual voice). On: two-mass folds that vibrate by themselves"}>
+      Physical
+    </Chip>
+  );
+}
+
 /**
  * The vocal-fold paralysis presets, for the vocal folds' screen header: one chip that steps
  * through them (it names the one playing, or "Custom" after the Folds page's dials moved).
