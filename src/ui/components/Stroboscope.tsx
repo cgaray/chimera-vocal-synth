@@ -36,10 +36,20 @@ export function Stroboscope() {
     const len = R * 1.22;
     const open = Math.min(1, a / Math.max(0.12, maxA)) * R * 0.42;
     const chink = area ? Math.min(R * 0.06, (minA / 0.05) * R * 0.08) : 0;
+    // Each fold drawn on its own: a paralyzed one rests off the midline (as the engine's rest gap,
+    // a lateral fold all the way open) and swings half as far. Drawn from the settings, not the
+    // engine: the phase lag between the folds isn't shown.
+    const src = st.source;
+    const swing = area ? (Math.max(0, a - minA) / Math.max(0.12, maxA)) * R * 0.42 : 0;
+    const paralyzed = src.paralysisLeft > 0 || src.paralysisRight > 0;
+    // the endoscope looks down: the patient's left fold is on the viewer's right
     for (const sg of [-1, 1]) {
+      const pr = Math.min(1, Math.max(0, sg > 0 ? src.paralysisLeft : src.paralysisRight));
+      const rest = pr * Math.pow(Math.min(1, Math.max(0, sg > 0 ? src.foldPositionLeft : src.foldPositionRight)), 1.5) * R * 0.42;
+      const openSide = open + (rest + swing * 0.5 - open) * pr;
       const edge = new Path2D();
       edge.moveTo(cx, cy - len / 2);
-      edge.quadraticCurveTo(cx + sg * (open + chink), cy + len * 0.05, cx + sg * chink * 0.8, cy + len / 2);
+      edge.quadraticCurveTo(cx + sg * (openSide + chink), cy + len * 0.05, cx + sg * (chink * 0.8 + rest), cy + len / 2);
       beam(ctx, edge, V.white, 1.6, { hot: true });
       const fold = new Path2D();
       fold.moveTo(cx + sg * 3, cy - len / 2 - 2);
@@ -50,8 +60,9 @@ export function Stroboscope() {
       falseFold.quadraticCurveTo(cx + sg * R * 0.92, cy - 2, cx + sg * R * 0.42, cy + len / 2 + 6);
       beam(ctx, falseFold, V.blueDim, 1);
       const ary = new Path2D();
-      ary.ellipse(cx + sg * R * 0.2, cy + len / 2 + R * 0.14, R * 0.13, R * 0.09, 0, 0, Math.PI * 2);
+      ary.ellipse(cx + sg * (R * 0.2 + rest * 0.5), cy + len / 2 + R * 0.14, R * 0.13, R * 0.09, 0, 0, Math.PI * 2);
       beam(ctx, ary, V.blueMid, 1.1);
+      if (paralyzed) label(ctx, sg > 0 ? "L" : "R", cx + sg * R * 0.72, cy + R * 0.62, { size: 8, color: pr > 0 ? V.amber : TEXT.secondary, align: "center", ls: 0.18 });
     }
     const epi = new Path2D();
     epi.moveTo(cx - R * 0.42, cy - R * 0.62);

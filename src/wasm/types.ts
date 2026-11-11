@@ -123,6 +123,14 @@ export interface VoiceSource {
   voiced: boolean;
   /** 0 dark … 1 bright (default 0.25: as tension sets it) */
   brightness: number;
+  /** vocal-fold paralysis 0 (healthy) … 1 (no motor drive), per fold */
+  paralysisLeft: number;
+  paralysisRight: number;
+  /** where a paralyzed fold rests: 0 median, ~0.2 paramedian, ~0.5 intermediate, 1 lateral */
+  foldPositionLeft: number;
+  foldPositionRight: number;
+  /** a paralyzed fold's slack pitch, semitones from the body's speaking pitch */
+  foldDetune: number;
 }
 
 export interface VoiceTelemetry {

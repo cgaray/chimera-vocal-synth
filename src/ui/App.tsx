@@ -6,7 +6,7 @@ import { TubeView } from "./components/TubeView.tsx";
 import { Stroboscope } from "./components/Stroboscope.tsx";
 import { SpectrumView } from "./components/SpectrumView.tsx";
 import { VowelMap } from "./components/VowelMap.tsx";
-import { VoiceControls, VoiceToggles } from "./components/VoiceControls.tsx";
+import { FoldPresetChip, VoiceControls, VoiceToggles } from "./components/VoiceControls.tsx";
 import { Keys } from "./components/Keys.tsx";
 import { Segmented, Toggle } from "./components/Controls.tsx";
 import { Screen } from "./components/Screen.tsx";
@@ -195,7 +195,7 @@ function PlayRight() {
       <Screen className="s-tube" title="Tube" sub="Glottis to lips">
         <TubeView />
       </Screen>
-      <Screen className="s-folds" title="Vocal folds" sub="Slowed 100×">
+      <Screen className="s-folds" title="Vocal folds" sub="Slowed 100×" tools={<FoldPresetChip />}>
         <Stroboscope />
       </Screen>
       <Screen className="s-spec" title="Spectrum" sub="Resonances">
